@@ -19,6 +19,7 @@ _EMOTION_LINES = {
     "sadness": "It's okay to feel sad right now. This feeling is real, and it will not last forever.",
     "anger": "It's okay to feel frustrated right now. I can feel this and still choose my next step.",
     "fear": "It's okay to feel afraid right now. I can take one small step even when I feel unsure.",
+    "anxiety": "It's okay to feel anxious right now. My body is on alert, but I am safe in this moment.",
     "joy": "I notice this moment of ease, and I let myself have it.",
     "disgust": "It's okay to feel uneasy right now. I can look at this thought with a little more distance.",
     "surprise": "It's okay to feel caught off guard. I can take a breath and take this one step at a time.",

@@ -133,5 +133,41 @@
     "applies_to_distortions": ["control_fallacy"],
     "applies_to_emotions": ["fear", "anger", "sadness"],
     "limitations": "Sorting can be genuinely difficult in ambiguous situations where influence is real but partial."
+  },
+  {
+    "id": "savoring_positive_experiences",
+    "name": "Savoring",
+    "description": "Deliberately slowing down to notice and absorb a positive moment -- what led to it, how it feels in the body, what it says about you -- instead of letting it pass unexamined.",
+    "citation": "Bryant, F. B., & Veroff, J. (2007). Savoring: A New Model of Positive Experience. Lawrence Erlbaum Associates.",
+    "applies_to_distortions": ["disqualifying_positive"],
+    "applies_to_emotions": ["joy"],
+    "limitations": "Only applicable when there is a genuine positive moment to work with; not a substitute for addressing the distortion when it recurs."
+  },
+  {
+    "id": "broaden_and_build_reflection",
+    "name": "Broaden-and-Build Reflection",
+    "description": "Using a moment of positive emotion to briefly widen attention -- what new ideas, connections, or options feel possible right now that didn't before -- and noting one worth acting on.",
+    "citation": "Fredrickson, B. L. (2001). The role of positive emotions in positive psychology: The broaden-and-build theory. American Psychologist, 56(3), 218-226.",
+    "applies_to_distortions": [],
+    "applies_to_emotions": ["joy", "surprise"],
+    "limitations": "Works best as a brief reflective pause, not a forced search for silver linings in genuinely difficult situations."
+  },
+  {
+    "id": "grounding_5_4_3_2_1",
+    "name": "5-4-3-2-1 Grounding",
+    "description": "Naming five things you can see, four you can hear, three you can touch, two you can smell, and one you can taste, to bring attention back to the present moment when it's been hijacked by worry.",
+    "citation": "Najavits, L. M. (2002). Seeking Safety: A Treatment Manual for PTSD and Substance Abuse. Guilford Press.",
+    "applies_to_distortions": ["fortune_telling", "catastrophizing"],
+    "applies_to_emotions": ["anxiety", "fear", "surprise", "neutral"],
+    "limitations": "Grounding reduces acute distress in the moment; it does not address the underlying thought pattern on its own."
+  },
+  {
+    "id": "worry_time_scheduling",
+    "name": "Scheduled Worry Time",
+    "description": "Setting aside a fixed, short daily window to deliberately think through worries, and deferring intrusive worry thoughts to that window the rest of the day.",
+    "citation": "Borkovec, T. D., Wilkinson, L., Folensbee, R., & Lerman, C. (1983). Stimulus control applications to the treatment of worry. Behaviour Research and Therapy, 21(3), 247-251.",
+    "applies_to_distortions": ["fortune_telling", "mental_filter"],
+    "applies_to_emotions": ["anxiety", "neutral"],
+    "limitations": "Takes a few days of practice to build the habit; not intended for acute crisis-level distress."
   }
 ]

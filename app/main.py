@@ -35,7 +35,7 @@ from app.nlp.distortions import detect_distortions
 from app.emotion.classifier import EmotionClassifier
 from app.context_engine.case_frame import CaseFrame
 from app.principle_selector.selector import select_techniques
-from app.narrative_gen.generator import NarrativeGenerator, parse_narrative_parts
+from app.narrative_gen.generator import NarrativeGenerator
 from app.narrative_gen.affirmations import build_affirmation
 from app.db.schema import init_db
 from app.db import repository
@@ -69,6 +69,23 @@ def journey():
 @app.route("/media/<path:filename>")
 def media(filename):
     return send_from_directory(MEDIA_DIR, filename)
+
+
+@app.route("/transcribe", methods=["POST"])
+def transcribe():
+    """
+    Speech-to-text only, no pipeline run. Called right after the browser
+    finishes recording (or a file is chosen) so the recognized text shows
+    up in the textarea immediately -- editable, like Google's voice typing
+    -- instead of silently attaching raw audio to the /process submission.
+    """
+    audio_file = request.files.get("audio")
+    if not audio_file:
+        return jsonify({"error": "No audio provided."}), 400
+    text = _transcribe_audio(audio_file)
+    if not text:
+        return jsonify({"error": "Couldn't make out any speech in that recording."}), 422
+    return jsonify({"text": text})
 
 
 @app.route("/process", methods=["POST"])
@@ -110,12 +127,19 @@ def process():
     techniques = select_techniques(case_frame)
     primary_technique = techniques[0]
 
-    # 7. Narrative generation (load -> use -> release).
+    # 7. Narrative generation (load -> use -> release). Dynamic 3-8 stage
+    # comic narrative: stage 1 is the situation as described, middle
+    # stages gradually introduce the reframe (one per distortion
+    # detected), final stage is a realistic next moment -- never a
+    # fabricated resolution (see generate_stages's validation).
     generator = NarrativeGenerator()
     try:
-        narrative = generator.generate(case_frame, primary_technique)
+        stages = generator.generate_stages(case_frame, primary_technique)
     finally:
         generator.unload()
+    narrative = "\n\n".join(
+        f"{s['type'].upper().replace('_', ' ')}: {s['caption']}" for s in stages
+    )
 
     # 8. Save to DB now (audio/image paths filled in below/async).
     session_id = repository.save_session(case_frame, narrative)
@@ -128,16 +152,14 @@ def process():
     audio_path = _run_tts(session_id, affirmation)
 
     # 10. Image generation in background thread; frontend polls /image_status.
-    # Builds a 3-panel CURRENT REALITY / REFRAME / DESIRED FUTURE storyboard
-    # (see app/image_gen/storyboard.py) rather than one plain illustration.
+    # Builds an N-panel comic storyboard (N = len(stages), 3-8) rather than
+    # one plain illustration or a fixed panel count (see
+    # app/image_gen/storyboard.py).
     _image_status[str(session_id)] = {"status": "pending", "path": None}
-    narrative_parts = parse_narrative_parts(narrative)
-    panel_prompts, panel_subtitles = _build_panel_prompts_and_subtitles(
-        case_frame.core_emotion, primary_technique["name"]
-    )
+    panel_prompts = _build_stage_image_prompts(case_frame.raw_text, stages, case_frame.core_emotion)
     threading.Thread(
         target=_generate_image_background,
-        args=(session_id, panel_prompts, panel_subtitles, narrative_parts),
+        args=(session_id, panel_prompts, stages),
         daemon=True,
     ).start()
 
@@ -149,6 +171,7 @@ def process():
         "core_emotion": case_frame.core_emotion,
         "technique": {"name": primary_technique["name"], "citation": primary_technique["citation"]},
         "narrative": narrative,
+        "stages": stages,
         "audio_url": f"/media/{os.path.basename(audio_path)}" if audio_path else None,
         "image_status_url": f"/image_status/{session_id}",
     }
@@ -177,7 +200,11 @@ def _check_cache(text: str):
 def _transcribe_audio(audio_file) -> str:
     from app.asr.transcriber import Transcriber
 
-    tmp_path = os.path.join(MEDIA_DIR, f"upload_{uuid.uuid4().hex}.wav")
+    # Keep the real extension (e.g. the browser mic recorder sends .webm,
+    # not .wav) so ffmpeg's format probing has an accurate hint to work from.
+    _, ext = os.path.splitext(audio_file.filename or "")
+    ext = ext if ext else ".wav"
+    tmp_path = os.path.join(MEDIA_DIR, f"upload_{uuid.uuid4().hex}{ext}")
     audio_file.save(tmp_path)
     transcriber = Transcriber()
     try:
@@ -205,9 +232,9 @@ def _run_tts(session_id: int, narrative: str) -> str:
     return output_path
 
 
-def _build_panel_prompts_and_subtitles(core_emotion: str, technique_name: str):
-    from app.image_gen.generator import build_panel_prompts, build_panel_subtitles
-    return build_panel_prompts(core_emotion, technique_name), build_panel_subtitles(core_emotion, technique_name)
+def _build_stage_image_prompts(raw_text: str, stages: list, core_emotion: str):
+    from app.image_gen.generator import build_stage_image_prompts
+    return build_stage_image_prompts(raw_text, stages, core_emotion)
 
 
 _IMAGE_WORKER_CODE = """
@@ -223,10 +250,10 @@ seed = {seed!r}
 
 gen = ImageGenerator()
 for prompt, path in zip(prompts, panel_paths):
-    gen.generate(prompt, path, seed=seed, num_inference_steps=2)
+    gen.generate(prompt, path, seed=seed)  # resolution/steps auto-tuned to hardware, see image_gen/generator.py
 gen.unload()
 
-compose_storyboard(panel_paths, {subtitles!r}, {narrative_parts!r}, {output_path!r})
+compose_storyboard(panel_paths, {stages!r}, {output_path!r})
 
 for p in panel_paths:
     try:
@@ -236,30 +263,29 @@ for p in panel_paths:
 """
 
 
-def _generate_image_background(session_id: int, prompts: list, subtitles: list, narrative_parts: dict):
+def _generate_image_background(session_id: int, prompts: list, stages: list):
     """
-    Runs SD-Turbo (three times, one per storyboard panel) in a separate
+    Runs SD-Turbo (once per comic stage, 3-8 times) in a separate
     subprocess rather than in-thread. On a RAM-constrained machine,
     SD-Turbo's VAE-decode step can segfault (see README's RAM note) -- and a
     segfault kills the entire process it runs in, threads included, which
     would take down the whole Flask server and every other in-flight
     request along with it. Isolating it in a subprocess means a crash there
     only fails that one image. The panel compositing (storyboard.py) also
-    runs in this same subprocess, after all three panels are generated.
+    runs in this same subprocess, after all panels are generated.
     """
     output_path = os.path.join(MEDIA_DIR, f"session_{session_id}.png")
-    panel_paths = [os.path.join(MEDIA_DIR, f"session_{session_id}_panel{i + 1}.png") for i in range(3)]
+    panel_paths = [os.path.join(MEDIA_DIR, f"session_{session_id}_panel{i + 1}.png") for i in range(len(prompts))]
     try:
         code = _IMAGE_WORKER_CODE.format(
             project_root=BASE_DIR,
             prompts=prompts,
             panel_paths=panel_paths,
-            seed=session_id,  # fixed per-session seed keeps the 3 panels' palette/style cohesive
-            subtitles=subtitles,
-            narrative_parts=narrative_parts,
+            seed=session_id,  # fixed per-session seed keeps the panels' palette/style cohesive
+            stages=stages,
             output_path=output_path,
         )
-        result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, timeout=300)
+        result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, timeout=600)
 
         if result.returncode == 0 and os.path.exists(output_path):
             repository.update_image_path(session_id, output_path)

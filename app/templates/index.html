@@ -8,7 +8,7 @@
 <body>
   <header>
     <h1>Reframe</h1>
-    <nav><a href="/">Home</a> | <a href="/journey">My Journey</a></nav>
+    <nav><a href="/">Home</a><a href="/journey">My Journey</a></nav>
   </header>
 
   <main>
@@ -17,9 +17,20 @@
       <form id="worry-form">
         <textarea id="text-input" rows="4" placeholder="Type what's worrying you..."></textarea>
         <div class="row">
-          <input type="file" id="audio-input" accept="audio/*">
+          <div id="mic-row">
+            <button type="button" id="mic-btn">🎤 Record</button>
+            <span id="mic-status" class="meta"></span>
+          </div>
           <button type="submit">Reframe this</button>
         </div>
+        <div class="row">
+          <audio id="mic-preview" controls class="hidden"></audio>
+          <button type="button" id="mic-clear" class="hidden">Discard recording</button>
+        </div>
+        <details id="file-upload-fallback">
+          <summary>Or upload an audio file instead</summary>
+          <input type="file" id="audio-input" accept="audio/*">
+        </details>
       </form>
     </section>
 
@@ -40,7 +51,7 @@
     </section>
 
     <section id="loading-section" class="hidden">
-      <p>Working through this — this can take a little while on a CPU-only machine...</p>
+      <p>Working through this — usually around 20-30 seconds...</p>
     </section>
   </main>
 

@@ -192,6 +192,46 @@ _COMPILED_RULES = [
 DISTORTION_EXPLANATIONS = {name: explanation for name, _, explanation in _RULES}
 
 
+_FOCUS_STOPWORDS = {
+    "i", "it", "this", "that", "something", "someone", "everything",
+    "nothing", "anything", "everyone", "anyone", "me", "myself",
+}
+
+
+def extract_focus_phrase(text: str) -> str:
+    """
+    Pulls out the most concrete noun phrase from the user's own words (e.g.
+    "my job interview", "my sister", "the exam") so the narrative and comic
+    panels built from it can stay grounded in what they actually described,
+    instead of falling back to a generic, unrelated scene. Picks the
+    longest noun chunk headed by a real noun -- longer chunks tend to carry
+    more of the concrete modifiers ("upcoming job interview" over just
+    "interview"). Returns "" if nothing concrete is found (e.g. very short
+    or abstract input), and callers should treat that as "no grounding
+    available" rather than invent one.
+    """
+    if not text or not isinstance(text, str):
+        return ""
+    try:
+        doc = _get_nlp()(text)
+    except Exception:
+        return ""
+
+    candidates = []
+    for chunk in doc.noun_chunks:
+        phrase = chunk.text.strip()
+        if len(phrase) < 3 or phrase.lower() in _FOCUS_STOPWORDS:
+            continue
+        if chunk.root.pos_ not in ("NOUN", "PROPN"):
+            continue
+        candidates.append(phrase)
+
+    if not candidates:
+        return ""
+    candidates.sort(key=len, reverse=True)
+    return candidates[0]
+
+
 def detect_distortions(text: str) -> list:
     """
     Returns a list of distortion names detected in the text (deduplicated,
